@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, CHAR, Boolean, ForeignKey, Integer, Text, Table, DateTime, func
+from sqlalchemy import Column, String, CHAR, Boolean, ForeignKey, Integer, Text, Table, DateTime, func, JSON
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -21,6 +21,7 @@ class User(Base):
     password = Column(String(500))
     is_active = Column(Boolean, default=True)
     user_type = Column(String(100))
+    resume = Column(JSON, nullable=True)
     jobs = relationship("Jobs", back_populates="recruiter")
     applied_jobs = relationship(
         "Jobs",

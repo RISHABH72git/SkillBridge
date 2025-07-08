@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import shutil
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import User, Jobs
 from schemas.base_model import Register, LoginRequest, JobRequest
+from utils.common import parse_resume
 from utils.security import hash_password, create_access_token, verify_access_token
 
 router = APIRouter()
@@ -92,7 +96,7 @@ def register_candidate(register: Register, db: Session = Depends(get_db)):
 
 
 @router.post("/jobs")
-def jobs_add(job_request: JobRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def jobs(job_request: JobRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user["user_type"] == "RECRUITER":
         new_job = Jobs(
             title=job_request.title,
@@ -111,7 +115,7 @@ def jobs_add(job_request: JobRequest, current_user: dict = Depends(get_current_u
 
 
 @router.get("/jobs")
-def jobs_add(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def jobs(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user["user_type"] == "RECRUITER":
         jobs_list = db.query(Jobs).filter(Jobs.recruiter_id == current_user["id"]).all()
     else:
@@ -149,3 +153,30 @@ def jobs_apply(job_id: str, current_user: dict = Depends(get_current_user), db: 
     job.applicants.append(candidate)
     db.commit()
     return {"message": "Job applied successfully", "data": {"id": job.id, "title": job.title}}
+
+
+@router.get("/applied/jobs")
+def applied_jobs(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user["user_type"] == "RECRUITER":
+        raise HTTPException(status_code=401, detail="You are not allowed to see jobs")
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    return {"message": "Applied Jobs", "data": {"id": user.id, "applied": user.applied_jobs}}
+
+
+@router.post("/upload/pdf")
+async def upload_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...),
+                     current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Validate file type
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    # Generate unique filename
+    file_id = f"{current_user['id']}.pdf"
+    file_path = os.path.join("uploads/pdfs", file_id)
+
+    # Save file to disk
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    background_tasks.add_task(parse_resume, file_path, current_user["id"], db)
+    return {"message": "PDF uploaded successfully", "filename": file_id}

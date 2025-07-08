@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,9 +8,11 @@ from routes import router
 
 app = FastAPI()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting application...")
+    os.makedirs("uploads/pdfs", exist_ok=True)
     # Create tables
     models.Base.metadata.create_all(bind=engine)
     yield  # control passes to FastAPI app
