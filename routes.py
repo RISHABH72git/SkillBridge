@@ -112,5 +112,40 @@ def jobs_add(job_request: JobRequest, current_user: dict = Depends(get_current_u
 
 @router.get("/jobs")
 def jobs_add(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    jobs_list = db.query(Jobs).filter(Jobs.recruiter_id == current_user["id"]).all()
-    return {"message": "Job added successfully", "data": jobs_list}
+    if current_user["user_type"] == "RECRUITER":
+        jobs_list = db.query(Jobs).filter(Jobs.recruiter_id == current_user["id"]).all()
+    else:
+        jobs_list = db.query(Jobs).all()
+    return {"message": "Jobs list", "data": jobs_list}
+
+
+@router.get("/jobs/{job_id}")
+def jobs_add(job_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user["user_type"] == "RECRUITER":
+        job = db.query(Jobs).filter(Jobs.recruiter_id == current_user["id"]).first()
+        jobs_list = {
+            "title": job.title,
+            "description": job.description,
+            "company_name": job.company_name,
+            "applicants": [],
+        }
+        for applicant in job.applicants:
+            jobs_list["applicants"].append({"id": applicant.id, "email": applicant.email})
+    else:
+        jobs_list = db.query(Jobs).filter(Jobs.id == job_id).all()
+    return {"message": "Jobs details", "data": jobs_list}
+
+
+@router.post("/jobs/{job_id}/apply")
+def jobs_apply(job_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user["user_type"] == "RECRUITER":
+        raise HTTPException(status_code=401, detail="You are not allowed to apply jobs")
+    job = db.query(Jobs).filter(Jobs.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    candidate = db.query(User).filter(User.id == current_user["id"]).first()
+    if candidate in job.applicants:
+        raise HTTPException(status_code=400, detail="Candidate has already applied to this job")
+    job.applicants.append(candidate)
+    db.commit()
+    return {"message": "Job applied successfully", "data": {"id": job.id, "title": job.title}}
