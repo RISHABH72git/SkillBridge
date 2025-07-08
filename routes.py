@@ -180,3 +180,18 @@ async def upload_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(
 
     background_tasks.add_task(parse_resume, file_path, current_user["id"], db)
     return {"message": "PDF uploaded successfully", "filename": file_id}
+
+
+@router.get("/resume")
+def resume(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == current_user['id']).first()
+    return {"message": "Resume details", "data": db_user.resume}
+
+
+@router.get("/resume/{user_id}")
+def resume(user_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user["user_type"] == "RECRUITER" and user_id:
+        db_user = db.query(User).filter(User.id == user_id).first()
+        return {"message": "Resume details", "data": db_user.resume}
+
+    raise HTTPException(status_code=404, detail="You are not allowed to see this resume")
